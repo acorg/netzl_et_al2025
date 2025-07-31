@@ -5,8 +5,8 @@ library(dplyr)
 library(tibble)
 library(tidyr)
 library(stringr)
-library(huxtable)
 library(ggplot2)
+library(rstatix)
 
 rm(list = ls())
 
@@ -80,6 +80,7 @@ for (table_name in table_names){
   
   forest_ba1 %>%
     filter(`Sera details long` %in% ba1_ba11_samples) -> forest_ba1
+  
   # ----------------------------- do the same for titers
   
   if(grepl("lessWD", table_name)){
@@ -90,14 +91,65 @@ for (table_name in table_names){
       filter(Webplotdigitizer == "n")
   }
   
-  full_titer <- wider_titer_variant_tables(forest_ba1, variants = target_variants, group_var = grouping_var,
-                                           comp_antigen = comp_antigen, match_sera = FALSE)
+  # calculate difference
+  forest_ba1 %>%
+    filter(`Comparator antigen` == comp_antigen) %>%
+    filter(OmicronVariant %in% target_variants) %>%
+    select(Study, Sourcelink, `Sera details long`, standardise_encounters, OmicronVariant, Log2Omi) %>%
+    group_by(Study, Sourcelink, `Sera details long`, standardise_encounters) %>%
+    mutate(ba11_diff = Log2Omi - Log2Omi[OmicronVariant == "BA.1.1"]) %>%
+    ungroup()-> comp_data
+    
+  # data differs significantly from normal
+  shapiro_test(comp_data %>%
+                 filter(OmicronVariant == "BA.1") %>%
+                 pull(ba11_diff))
   
-  full_titer <- full_titer %>%
-    filter(Lineage == "BA.1")
-  formatted_titer <- format_huxtable_variant_table(full_titer, target_variants, column_names = c("Comparator antigen",
-                                                                                                 "Serum group"))
+  # 2 outliers that result in normal distribution and non symmetrical distribution
+  hist(comp_data %>%
+         filter(OmicronVariant == "BA.1") %>%
+         pull(ba11_diff))
   
-  save_summary_table(formatted_titer, paste0("mean_titer-", summary_tab_name), table_dir, tab_name)
+  comp_data %>%
+    filter(ba11_diff < 1) %>%
+    filter(OmicronVariant == "BA.1") %>%
+    pull(ba11_diff) -> ba1_diffs
+  # now data is normally distributed
+  shapiro_test(ba1_diffs)
   
+  # difference is not significant
+  comp_data %>%
+    filter(ba11_diff < 1) %>%
+    filter(!`Sera details long` %in% c("Suzuki/Kawaoka Inf + 2*Pfizer (3m post 3rd dose)", "Klein 2*Pfizer")) %>%
+    pairwise_t_test(Log2Omi ~ OmicronVariant)
+  
+  # make plot
+  comp_data %>%
+    mutate(Outlier = ba11_diff > 1) %>%
+    ggplot(aes(x = OmicronVariant, y = Log2Omi, color = Outlier, group = `Sera details long`)) + 
+    geom_line() +
+    geom_point() + 
+    xlab("Omicron lineage") +
+    scale_y_continuous(labels = function(x) round(2^x*10),
+                       breaks = -1:8,
+                       name = "Neutralization titer") +
+    scale_color_manual(values = c("TRUE" = "red", "FALSE" = "black")) +
+    facet_wrap(~ standardise_encounters, ncol = length(target_sr_groups)) +
+    theme_bw() + 
+    theme(strip.background.x = element_blank(),
+          legend.position = "none") -> p
+  
+  comp_data %>%
+    filter(OmicronVariant == "BA.1") %>%
+    mutate(Outlier = ba11_diff > 1) %>%
+    ggplot() +
+    geom_histogram(aes(x = ba11_diff, fill = Outlier), color = "white") + 
+    scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "black")) +
+    xlab("Log2(BA.1 GMT) - Log2(BA.1.1 GMT)") + 
+    ylab("Count") +
+    theme_bw() + 
+    theme(legend.position = c(0.8, 0.8)) -> hist_p
+
+    p + hist_p + plot_layout(widths = c(3, 1)) + plot_annotation(tag_levels = "a") -> comb_plot
+    ggsave(file.path(figures_dir, paste0("sfig1-", gsub("docx", "png", summary_tab_name))), comb_plot, width = 14, height = 4, units = "in", dpi = 300, ) 
 }

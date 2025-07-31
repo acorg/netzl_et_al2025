@@ -172,6 +172,14 @@ for (table_name in table_names){
     
   }
   
+  # check homoscedasticity 
+  forest_data_sub %>%
+    filter(both_assays) %>%
+    filter(shapiro_comb > 0.05) %>%
+    filter(count_n > 1) %>%
+    group_by(standardise_encounters) %>%
+    levene_test(as.formula("log_fold_change~standardised_assay"))
+   
   fc_from_wt_ttest <- do_stat_test_and_effsize(forest_data_sub, test_formula = "log_fold_change~standardised_assay", stat_test = "t")
   fc_from_wt_wilcox <- do_stat_test_and_effsize(forest_data_sub, test_formula = "log_fold_change~standardised_assay", stat_test = "wilcoxon")
   
@@ -237,10 +245,28 @@ increasing p-value. A statistic above 0 indicates higher values in Group
            both_assays = ("PV" %in% standardised_assay) & ("LV" %in% standardised_assay)) %>%
     ungroup() -> forest_data_comb
 
+  
   forest_data_comb %>%
     filter(both_assays) %>%
     filter(count_n > 1) %>%
     filter(shapiro_comb > 0.05) %>%
+    group_by(`Comparator antigen`, standardise_encounters) %>%
+    levene_test(Titer~standardised_assay) %>%
+    mutate(levene_p = p)-> gmt_levene
+    
+ 
+  forest_data_comb %>%
+    left_join(., gmt_levene %>%
+                select(`Comparator antigen`, standardise_encounters, levene_p),
+                by = c("Comparator antigen", "standardise_encounters")) -> forest_data_comb
+  
+  forest_data_comb[is.na(forest_data_comb$levene_p), "levene_p"] <- 0
+  
+  forest_data_comb %>%
+    filter(both_assays) %>%
+    filter(count_n > 1) %>%
+    filter(shapiro_comb > 0.05) %>%
+    filter(levene_p > 0.05) %>%
     group_by(`Comparator antigen`, standardise_encounters) %>%
     t_test(Titer~standardised_assay, detailed = TRUE) %>%
     add_significance() %>%
@@ -263,6 +289,7 @@ increasing p-value. A statistic above 0 indicates higher values in Group
     filter(both_assays) %>%
     filter(count_n > 1) %>%
     filter(shapiro_comb > 0.05) %>%
+    filter(levene_p > 0.05) %>%
     group_by(`Comparator antigen`, standardise_encounters) %>%
     cohens_d(Titer~standardised_assay, var.equal = FALSE, hedges.correction = TRUE) %>%
     mutate(effsize = round(effsize, 2),
@@ -277,7 +304,7 @@ increasing p-value. A statistic above 0 indicates higher values in Group
   forest_data_comb %>%
     filter(both_assays) %>%
     filter(count_n > 1) %>%
-    filter(shapiro_comb <= 0.05) %>%
+    filter(shapiro_comb <= 0.05 | levene_p <= 0.05) %>%
     group_by(`Comparator antigen`, standardise_encounters) %>%
     wilcox_test(Titer~standardised_assay, detailed = TRUE) %>%
     add_significance() %>%
@@ -296,7 +323,7 @@ increasing p-value. A statistic above 0 indicates higher values in Group
   forest_data_comb %>%
     filter(both_assays) %>%
     filter(count_n > 1) %>%
-    filter(shapiro_comb <= 0.05) %>%
+    filter(shapiro_comb <= 0.05 | levene_p <= 0.05) %>%
     group_by(`Comparator antigen`, standardise_encounters) %>%
     wilcox_effsize(Titer~standardised_assay) %>%
     mutate(effsize = round(effsize, 2),

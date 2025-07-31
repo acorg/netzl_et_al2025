@@ -2,7 +2,7 @@
 # setup page and load metadata
 rm(list = ls())
 
-library(meantiter)
+#library(meantiter)
 library(dplyr)
 library(tibble)
 library(tidyr)
@@ -61,7 +61,7 @@ for (table_name in table_names){
     standardise_time_to_mean_days(.)
  
   forest_data %>%
-    select(all_of(c("Comparator antigen", "OmicronVariant", "Sera_details_no_time", "Log2HAg", "Log2Omi",
+    select(all_of(c("Comparator antigen", "Uncertainty", "OmicronVariant", "Sera_details_no_time", "Log2HAg", "Log2Omi",
                     "Standardised_sera_names", "standardise_encounters", "vacc_type_het", "vacc_type","vaccine_manufacturer", "standardised_assay", "standardised_pseudo",
                     "log_fold_change", "mean_days"))) %>%
     mutate(shape = "sample") %>%
@@ -73,19 +73,19 @@ for (table_name in table_names){
   
   target_sr_groups <- c("WT conv", "2x Vax", "3x Vax", "Vax + BA.1", "Inf + Vax")
   
-  fc_exposure <- fold_change_since_exposure(forest_data_sub %>%
+  fc_exposure <- fold_change_since_exposure_assay_color(forest_data_sub %>%
                                               mutate(OmicronVariant = paste0("FC to ", OmicronVariant)), variants = c("FC to BA.1"), target_sr_groups = target_sr_groups, comp_antigen = "D614G",
-                             ymax = 0.5, ymin = -7)
+                             ymax = 0.5, ymin = -7) + 
+    theme(axis.text.x = element_text(size = 7),
+          legend.position = "top")
   
-  stop()
-  ggsave(file.path(path_to_save, paste0("fc_since_exposure.", fileext)), fc_exposure, dpi = 300, width = 8, height = 3.5)
+  ggsave(file.path(path_to_save, paste0("fc_since_exposure_assay.", fileext)), fc_exposure, dpi = 300, width = 8, height = 2.5)
   
-  stop()
-  
+
   # now titers
   forest_data %>%
     filter(Webplotdigitizer == "n") %>%
-    select(all_of(c("Comparator antigen","Study", "OmicronVariant", "Sera_details_no_time", "Log2HAg", "Log2Omi",
+    select(all_of(c("Comparator antigen","Study", "Uncertainty","OmicronVariant", "Sera_details_no_time", "Log2HAg", "Log2Omi",
                     "Standardised_sera_names", "standardise_encounters", "vacc_type_het", "vacc_type","vaccine_manufacturer", "standardised_assay", "standardised_pseudo",
                     "log_fold_change", "mean_days", "Sera details long"))) %>%
     mutate(shape = "sample") %>%
@@ -103,15 +103,17 @@ for (table_name in table_names){
     mutate(log_fold_change = Log2Omi) %>%
     unique()
   
-  write.csv(forest_data_titer, file.path(data_dir, "titer_tables", paste0(tab_name, "_titers_since_exposure.csv")), row.names = FALSE)
-  
   forest_data_titer <- forest_data_titer %>%
     select(!`Sera details long`)
   
-  titers <- titer_since_exposure(forest_data_titer %>%
+  titers <- titer_since_exposure_assay_color(forest_data_titer %>%
                                    mutate(OmicronVariant = gsub("D614G", "614D/G", OmicronVariant)) %>%
-                                   mutate(OmicronVariant = paste(OmicronVariant, "GMT")), ymin = -1, ymax = 13, target_sr_groups = c(target_sr_groups), variants = c("614D/G GMT", "BA.1 GMT"))
+                                   mutate(OmicronVariant = paste(OmicronVariant, "GMT")), ymin = -1, ymax = 13, target_sr_groups = c(target_sr_groups), variants = c("614D/G GMT", "BA.1 GMT")) +
+    theme(axis.text.x = element_text(size = 7),
+          legend.position = "none")
   
-  ggsave(file.path(path_to_save, paste0("titers_since_exposure.", fileext)), titers, dpi = 300, width = 8, height = 6)
+  fc_exposure / titers + plot_annotation(tag_levels = "a") + plot_layout(heights = c(1, 2)) -> p_comb
+  ggsave(file.path(path_to_save, paste0("titers_since_exposure_assay.", fileext)), titers, dpi = 300, width = 8, height = 5)
+  ggsave(file.path(path_to_save, paste0("sfig4_comb_since_exposure_assay.", fileext)), p_comb, dpi = 300, width = 8, height = 7.5)
 
 }

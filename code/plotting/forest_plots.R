@@ -91,6 +91,7 @@ for (table_name in table_names){
         arrange(standardise_encounters) %>%
         mutate(Row_long = 1:nrow(forest_data_sub))
       
+      stop()
       plot_forest_plot_by_sublineage(forest_data_sub, sublineage = c(sl), group_by = c("standardise_encounters"), 
                                      path_save = path_to_save_sub, axis_text_size = 8, max_plot_height = 6)
       

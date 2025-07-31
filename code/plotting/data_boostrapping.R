@@ -135,11 +135,26 @@ for (table_name in table_names){
               mean = Rmisc::CI(mean)["mean"],
               CI_width = upper - lower)
   
+  data_sub %>%
+    mutate(serum_group = standardise_encounters) %>%
+    group_by(serum_group) %>%
+    summarize(lower = Rmisc::CI(log_fold_change)["lower"],
+              upper = Rmisc::CI(log_fold_change)["upper"],
+              mean = Rmisc::CI(log_fold_change)["mean"],
+              CI_width = upper - lower) -> total_mean
+  stop()
+  # do total summary
+  data_sub %>%
+    group_by()
+  
   # plot it 
   bootstrap_summary %>%
     filter(n_times < 100) %>%
     ggplot(aes(x = n, y = -mean)) + 
     geom_ribbon(aes(ymin = -lower, ymax = -upper), alpha = 0.2, color = NA) + 
+    geom_hline(data = total_mean, aes(yintercept = -mean), color = "tomato", alpha = 1) +
+    geom_hline(data = total_mean, aes(yintercept = -lower), color = "tomato", alpha = 0.7, linetype = "dashed") +
+    geom_hline(data = total_mean, aes(yintercept = -upper), color = "tomato", alpha = 0.7, linetype = "dashed") +
     geom_line() + 
     facet_grid(~serum_group) + 
     scale_y_continuous(labels = function(x) paste0("-",round(2^abs(x), 2), "x"),
@@ -149,9 +164,11 @@ for (table_name in table_names){
     theme_bw() + 
     theme(strip.background = element_blank())-> mean_bootstrap
   
+  
   bootstrap_summary %>%
     filter(n_times < 100) %>%
     ggplot(aes(x = n, y = CI_width)) + 
+    geom_hline(data = total_mean, aes(yintercept = CI_width), color = "tomato", alpha = 0.7, linetype = "dashed") +
     geom_line() + 
     facet_grid(~serum_group) + 
     scale_y_continuous(labels = function(x) paste0(round(2^x, 2), "x"),
